@@ -1,0 +1,113 @@
+---
+title: "machine learning project"
+author: "Fan Ouyang"
+date: "April 10, 2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+###Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+## Introduction
+### Variables
+Outcome variable is classe, a factor variable with 5 levels. For this data set, “participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in 5 different fashions: 
+- exactly according to the specification (Class A)
+- throwing the elbows to the front (Class B)
+- lifting the dumbbell only halfway (Class C)
+- lowering the dumbbell only halfway (Class D)
+- throwing the hips to the front (Class E)
+
+### Models
+Two models will be tested using decision tree and random forest algorithms. The model with the highest accuracy will be chosen as our final model.
+
+## load data and cleaning data 
+```{r}
+library(caret)
+trnLnk <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+tstLnk <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+training_data <- read.csv(url(trnLnk),na.strings=c("NA","#DIV/0!",""),header=T)
+testing_data <- read.csv(url(tstLnk),na.strings=c("NA","#DIV/0!",""),header=T)
+
+#Check dimensions of train dataset
+dim(training_data)
+dim(testing_data)
+
+##Create list of unwanted fields:
+trnRemCols <- grepl("^X|timestamp|window|user_name",names(training_data))
+tstRemCols <- grepl("^X|timestamp|window|user_name",names(testing_data))
+
+#Remove unwanted fields
+trnRmUnwtdCols <- training_data[,!trnRemCols]
+tstRmUnwtdCols <- testing_data[,!tstRemCols]
+#Create list of near zero variance fields
+NearZeroVar <- nearZeroVar(trnRmUnwtdCols,saveMetrics=T)
+
+#Remove near zero variance fields
+trnRmZVCols <- trnRmUnwtdCols[,!NearZeroVar$nzv]
+tstRmZVCols <- tstRmUnwtdCols[,!NearZeroVar$nzv]
+
+#Remove fields with NAs
+trnNArmCondn <- (colSums(is.na(trnRmZVCols))!=0)
+tstNArmCondn <- (colSums(is.na(tstRmZVCols))!=0)
+
+trnRmNACols <- trnRmZVCols[,!trnNArmCondn]
+tstRmNACols <- tstRmZVCols[,!tstNArmCondn]
+
+#New Training and Testing Datasets after clean-up
+trnDataNew <- trnRmNACols
+tstDataNew <- tstRmNACols
+
+dim(trnDataNew); dim(tstDataNew)
+```
+## prediction
+The datasets are now partitioned to make use of cross validation
+```{r}
+set.seed(1234) 
+
+#Train-model Validation Partition
+intrain <- createDataPartition(y=trnDataNew$classe,p=0.7,list=F)
+
+modTRNSample <- trnDataNew[intrain,] #To be used for model training
+modTSTSample <- trnDataNew[-intrain,] #To be used for testing accuracy of models
+
+dim(modTRNSample); dim(modTSTSample)
+```
+### building models
+## Method 1: Decision Tree
+```{r}
+library(rpart)
+model1 <- rpart(classe~.,method="class",data=modTRNSample)
+prediction1<-predict(model1,modTSTSample,type="class")
+library(rpart.plot)
+rpart.plot(model1,main="classification tree",extra=102,under=T,faclen=0)
+confusionMatrix(prediction1,modTSTSample$classe)
+```
+## Method 2: Random Forest
+```{r}
+library(randomForest)
+model2 <- randomForest(classe~.,method="class",data=modTRNSample)
+prediction2<-predict(model2,modTSTSample,type="class")
+confusionMatrix(prediction2,modTSTSample$classe)
+```
+
+### Conclusion
+Random forest, though a little more complex, was way more accurate. Hence, the random forest technique was chosen as the final prediction algorithm.
+
+### submission
+```{r}
+predictfinal <- predict(model2, testing_data, type="class")
+predictfinal
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predictfinal)
+```
