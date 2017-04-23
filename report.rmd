@@ -21,9 +21,9 @@ Outcome variable is classe, a factor variable with 5 levels. For this data set, 
 - throwing the hips to the front (Class E)
 
 ### Models
-Two models will be tested using decision tree and random forest algorithms. The model with the highest accuracy will be chosen as our final model.
+Two models will be tested using decision tree and random forest algorithms. The model with the higher accuracy will be chosen as our final model.
 
-## load data and cleaning data 
+## Loading data and cleaning data 
 ```{r}
 library(caret)
 trnLnk <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
@@ -43,6 +43,7 @@ tstRemCols <- grepl("^X|timestamp|window|user_name",names(testing_data))
 #Remove unwanted fields
 trnRmUnwtdCols <- training_data[,!trnRemCols]
 tstRmUnwtdCols <- testing_data[,!tstRemCols]
+
 #Create list of near zero variance fields
 NearZeroVar <- nearZeroVar(trnRmUnwtdCols,saveMetrics=T)
 
@@ -63,8 +64,8 @@ tstDataNew <- tstRmNACols
 
 dim(trnDataNew); dim(tstDataNew)
 ```
-## prediction
-The datasets are now partitioned to make use of cross validation
+## Data spliting
+In order to get out-of-sample errors, I split the training set into a training set (70%) for prediction and a validation set (30%) to compute the out-of-sample errors.
 ```{r}
 set.seed(1234) 
 
@@ -76,7 +77,21 @@ modTSTSample <- trnDataNew[-intrain,] #To be used for testing accuracy of models
 
 dim(modTRNSample); dim(modTSTSample)
 ```
-### building models
+## Cross validation
+```{r}
+library(caret)
+control <- trainControl(method = "cv", number = 5)
+fit_rpart <- train(classe ~ ., data = modTRNSample, method = "rpart", trControl = control)
+print(fit_rpart, digits = 4)
+library(rattle)
+fancyRpartPlot(fit_rpart$finalModel)
+library(caret)
+predict_rpart <- predict(fit_rpart, modTSTSample)
+conf_rpart <- confusionMatrix(modTSTSample$classe, predict_rpart)
+accuracy_rpart <- conf_rpart$overall[1]
+```
+
+
 ## Method 1: Decision Tree
 ```{r}
 library(rpart)
@@ -101,13 +116,4 @@ Random forest, though a little more complex, was way more accurate. Hence, the r
 ```{r}
 predictfinal <- predict(model2, testing_data, type="class")
 predictfinal
-pml_write_files = function(x){
-  n = length(x)
-  for(i in 1:n){
-    filename = paste0("problem_id_",i,".txt")
-    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
-  }
-}
-
-pml_write_files(predictfinal)
 ```
